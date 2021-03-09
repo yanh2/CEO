@@ -4,12 +4,13 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import pandas as pd
 import openpyxl
+import asyncio
+import websockets
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-user_name = None
 
 
 class Student(db.Model):
@@ -283,8 +284,25 @@ def supervise(cid, room):
 def release():
     return render_template('release.html')
 
+
+async def accept(websocket, path):
+    while True:
+        data_rcv = await websocket.recv()
+        data_rcv = data_rcv.split()
+        sid = data_rcv[0]
+        password = data_rcv[1]
+        student = Student.query.filter_by(sid=sid, password=password).first()
+
+        if student is None:
+            await websocket.send("False")
+        else:
+            await websocket.send("True")
+
 if __name__ == '__main__':
-    # app.debug = True
+    app.debug = True
     db.create_all()
     app.secret_key = "123" #session 사용하려면 필요함
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run()
+    websoc_svr = websockets.serve(accept, "localhost", 5000)
+    asyncio.get_event_loop().run_until_complete(websoc_svr)
+    asyncio.get_event_loop().run_forever()
